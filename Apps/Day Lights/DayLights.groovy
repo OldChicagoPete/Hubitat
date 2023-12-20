@@ -4,7 +4,7 @@
 *	Author:
 *		OldChicagoPete
 *
-*	Documentation:  Future Hubitat Community Post
+*	Documentation:  https://community.hubitat.com/t/release-day-lights-an-interation-of-circadian-daylight/130157
 *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *                                                                                                     *
@@ -29,6 +29,8 @@
 *  Changelog:
 *	0.90 (November 2, 2023)
 *		- Soft Release
+*	0.91 (December 20, 2023)
+*		- General Release
 */
 
 definition(
