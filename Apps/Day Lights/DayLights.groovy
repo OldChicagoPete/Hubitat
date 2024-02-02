@@ -1,4 +1,5 @@
-/**
+/*
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *	Day Lights
 *
 *	Author:
@@ -6,31 +7,38 @@
 *
 *	Documentation:  https://community.hubitat.com/t/release-day-lights-an-interation-of-circadian-daylight/130157
 *
-* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-*                                                                                                     *
-*	Forked from:                                                                                        *
-*  		Hubitat Circadian Daylight 0.81                                                                 *
-*		https://raw.githubusercontent.com/adamkempenich/hubitat/master/Apps/CircadianDaylight.groovy      *
-*	Which was forked from:                                                                              *
-*  		SmartThings Circadian Daylight v. 2.6                                                           *
-*		https://github.com/KristopherKubicki/smartapp-circadian-daylight/                                 *
-*                                                                                                     *
-*   Other credits from the old source code                                                            *
-*                                                                                                     *
-*   Custom fade-in/fade-out time:                                                                     *
-*       Jeff Byrom (@talz13)                                                                          *
-*   Color temperature converter:                                                                      *
-*       http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/                     *
-*   RGB to Hue/Saturation/Value:                                                                      *
-*       http://www.rapidtables.com/convert/color/rgb-to-hsv.htm                                       *
-*                                                                                                     *
-* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+*
+*	Forked from:
+*  		Hubitat Circadian Daylight 0.81
+*		https://raw.githubusercontent.com/adamkempenich/hubitat/master/Apps/CircadianDaylight.groovy
+*	Which was forked from:
+*  		SmartThings Circadian Daylight v. 2.6
+*		https://github.com/KristopherKubicki/smartapp-circadian-daylight/
+*
+*
+*
+*   Custom fade-in/fade-out time:
+*       Jeff Byrom (@talz13)
+*   Color temperature converter:
+*       http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/
+*   RGB to Hue/Saturation/Value:
+*       http://www.rapidtables.com/convert/color/rgb-to-hsv.htm
+*
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
 *  Changelog:
 *	0.90 (November 2, 2023)
 *		- Soft Release
 *	0.91 (December 20, 2023)
 *		- General Release
+*	0.92 (February 2, 2024)
+*		- Clarification on device selection headings
+*		- When using RGB mode devices with Dynamic Brightness, the calculated level will be used for the Value parameter
+*		- RGB mode devices will not be polled to determine if Dynamic Brightness has been overridden
+*		- Fix for HSV return values
+*
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 */
 
 definition(
@@ -64,8 +72,8 @@ def MainPage(){
 		
         section("<h2>Select Devices</h2>") {
             paragraph "Individual devices should only be selected for one group"
-            input "colorTemperatureDevices", "capability.colorTemperature", title: "<b>Color temperature devices</b>", multiple:true
-            input "colorDevices", "capability.colorControl", title: "<b>Color changing devices</b>", multiple:true
+            input "colorTemperatureDevices", "capability.colorTemperature", title: "<b>Color temperature devices (CT mode)</b>", multiple:true
+            input "colorDevices", "capability.colorControl", title: "<b>Color changing devices (RGB mode)</b>", multiple:true
             input "dimmableDevices", "capability.switchLevel", title: "<b>Dimmable devices (requires Dynamic Brightness to be enabled)</b>", multiple:true
         }
 
@@ -427,11 +435,12 @@ def eventHandler(evt) {
 				state.disabledFromDimmer = true
 			}
 		}
-		for (device in colorDevices) {
-			if (device.currentValue("switch") == "on" && device.currentValue("level") != state.lastAssignedBrightness) {
-				state.disabledFromDimmer = true
-			}
-		}
+        //Some color devices don't precisely apply the HSV values, so they will not be considered for disabling Dynamic Brightness
+		//for (device in colorDevices) {
+		//	if (device.currentValue("switch") == "on" && device.currentValue("level") != state.lastAssignedBrightness) {
+		//		state.disabledFromDimmer = true
+		//	}
+		//}
 		for (device in dimmableDevices) {
 			if (device.currentValue("switch") == "on" && device.currentValue("level") != state.lastAssignedBrightness) {
 				state.disabledFromDimmer = true
@@ -454,10 +463,13 @@ def eventHandler(evt) {
 	def rgb = ctToRGB(ct)
 	def hex = rgbToHex(rgb).toUpperCase()
 	def hsv = rgbToHSV(rgb)
-    def color = [hex: hex, hue: hsv.h, saturation: hsv.s, level: bright]
+    if (settings.dynamicBrightness && !state.disabledFromDimmer) {
+        hsv.v = bright
+    }
+    def color = [hex: hex, hue: hsv.h, saturation: hsv.s, level: hsv.v]
     state.lastAssignedBrightness = bright
-
-    logEnhancedDescriptionText("CT=${ct}K, Level=${bright}%, Color=${hex}, Hue=${hsv.h}, Saturation=${hsv.s}")
+    
+    logEnhancedDescriptionText("CT=${ct}K, Level=${bright}%, Color=${hex}, Hue=${hsv.h}, Saturation=${hsv.s}, Value=${hsv.v}")
     logDebug("Color Temperature: ${ct}")
     logDebug("Brightness: ${bright}")
 	logDebug("Color: ${color}")
@@ -476,10 +488,7 @@ def eventHandler(evt) {
     for (device in colorDevices) {
         if (device.currentValue("switch") == "on") {
             if (device.currentValue("color") != hex || (settings.dynamicBrightness && !state.disabledFromDimmer && device.currentValue("level") != bright)) {
-                if (!settings.dynamicBrightness || state.disabledFromDimmer) {
-                    color.level = device.currentValue("level")
-                } 
-            device.setColor(color)
+                device.setColor(color)
             }
         }
     }
@@ -487,7 +496,7 @@ def eventHandler(evt) {
     for (device in dimmableDevices) {
         if (device.currentValue("switch") == "on") {
             if (settings.dynamicBrightness && !state.disabledFromDimmer && device.currentValue("level") != bright) {
-                    device.setLevel(bright)
+                device.setLevel(bright)
             }
         }
     }
@@ -849,8 +858,6 @@ def rgbToHSV(rgb) {
     //value
     v = max * 100
 
-    def degreesRange = (360 - 0)
-    def percentRange = (100 - 0)
-
-    return [h: ((h * percentRange) / degreesRange) as Integer, s: ((s * percentRange) / degreesRange) as Integer, v: v as Integer]
+    logDebug("r=${rgb.r}, g=${rgb.g}, b=${rgb.b}, max=${max}, min=${min}, delta=${delta}, h=${Math.round(h)}, s=${Math.round(s)}, v=${Math.round(v)}")
+    return [h: Math.round(h / 3.6), s: Math.round(s), v: Math.round(v)]
 }
