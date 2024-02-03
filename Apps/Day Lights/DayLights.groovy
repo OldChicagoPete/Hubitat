@@ -37,6 +37,8 @@
 *		- When using RGB mode devices with Dynamic Brightness, the calculated level will be used for the Value parameter
 *		- RGB mode devices will not be polled to determine if Dynamic Brightness has been overridden
 *		- Fix for HSV return values
+*	0.93 (February 3, 2024)
+*		- New option in Color Temperature Options to force a device into CT mode by setting saturation to zero
 *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 */
@@ -165,6 +167,8 @@ def ColorTemperatureOptions() {
             input "useCTOverrides", "bool", title: "<b>Use Color Temperature Overrides?</b>"
             input "warmCTOverride", "number", title: "Warm White Temperature (default is 2700)"
             input "coldCTOverride", "number", title: "Cold White Temperature (default is 6500)"
+		    paragraph "<br>"
+            input "forceCT", "bool", title: "<b>Force CT mode with Saturation=0? (for LIFX bulbs only?)</b>"
         }
     }
 }
@@ -476,6 +480,10 @@ def eventHandler(evt) {
 
     for (device in colorTemperatureDevices) {
         if (device.currentValue("switch") == "on") {
+		    if (forceCT && device.currentValue("colorMode") != "CT") {
+                logEnhancedDescriptionText("Attempting to force CT mode")
+			    device.setSaturation(0)
+		    }
             if (device.currentValue("colorTemperature") != ct) {
                 device.setColorTemperature(ct)
             }
