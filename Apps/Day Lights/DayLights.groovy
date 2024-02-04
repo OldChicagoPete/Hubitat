@@ -39,6 +39,10 @@
 *		- Fix for HSV return values
 *	0.93 (February 3, 2024)
 *		- New option in Color Temperature Options to force a device into CT mode by setting saturation to zero
+*	0.94 (February 3, 2024)
+*		- New option to reset the color temperature when a device is dimmed manually
+*		- Fix for Brightness Options page
+*		- Minor formatting updates
 *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 */
@@ -81,6 +85,7 @@ def MainPage(){
 
         section("<h2>Dynamic Brightness</h2>") {
             input "dynamicBrightness","bool", title: "Adjust brightness based on the time of day"
+            input "resetCT", "bool", title: "Reset the color temperature after manual dimming? (for bulbs (e.g. LIFX) that change color temperature when dimmed)"
         }
 
         section("<h2>Advanced Options</h2>") {
@@ -168,7 +173,7 @@ def ColorTemperatureOptions() {
             input "warmCTOverride", "number", title: "Warm White Temperature (default is 2700)"
             input "coldCTOverride", "number", title: "Cold White Temperature (default is 6500)"
 		    paragraph "<br>"
-            input "forceCT", "bool", title: "<b>Force CT mode with Saturation=0? (for LIFX bulbs only?)</b>"
+            input "forceCT", "bool", title: "<b>Force CT mode with Saturation=0? (for bulbs (e.g. LIFX) that do not automatically switch to CT mode when a color temperature is assigned)</b>"
         }
     }
 }
@@ -178,8 +183,10 @@ def BrightnessOptions() {
 
         section("<h2>Dynamic Brightness Options</h2>") {
             paragraph "When Dynamic Brightness is enabled the brightness on your devices will be adjusted from low at sunrise to high at midday then back to low at sunset.<br><br>"
-		    input name: "brightnessProfile", type: "enum", title: "<b>Brightness Profile</b> (default is Gradual)", required: true, defaultValue: 1, options:["Gradual":"Gradual - Brightening begins at sunrise and reaches maximum at midday","Accelerated":"Accelerated - Brightening begins at sunrise and reaches maximum prior to midday","Delayed":"Delayed - Remains at minimum until accelerated brightening will reach maximum at midday"]
-		    paragraph "<br>"
+			if (dynamicBrightness) {
+		        input name: "brightnessProfile", type: "enum", title: "<b>Brightness Profile</b> (default is Gradual)", required: true, defaultValue: 1, options:["Gradual":"Gradual - Brightening begins at sunrise and reaches maximum at midday","Accelerated":"Accelerated - Brightening begins at sunrise and reaches maximum prior to midday","Delayed":"Delayed - Remains at minimum until accelerated brightening will reach maximum at midday"]
+		        paragraph "<br>"
+			}
             input "useBrightnessOverrides", "bool", title: "<b>Use Brightness Overrides?</b>"
             input "minBrightnessOverride","number", title: "Low Brightness (default is 1)"
             input "maxBrightnessOverride","number", title: "High Brightness (default is 100)"
@@ -331,6 +338,9 @@ private def initialize() {
 	
     if (colorTemperatureDevices) {
         subscribe(colorTemperatureDevices, "switch.on", eventDeviceOn)
+		if (resetCT) {
+		    subscribe(colorTemperatureDevices, "level", eventLevel)
+	    }
     }
     if (colorDevices) {
         subscribe(colorDevices, "switch.on", eventDeviceOn)
@@ -397,6 +407,11 @@ def eventSwitch(evt) {
     eventHandler("Disable Switch")
 }
 
+def eventLevel(evt) {
+
+    eventHandler("Reset Color Temperature")
+}
+
 def eventWakeup(evt) {
 
 	if (!state.scheduleActive)  {
@@ -411,7 +426,7 @@ def disableDimmerOverride(evt) {
     state.disabledFromDimmer = false
     unschedule(disableDimmerOverride)
     state.bypassManualOverrideCheck = true
-    eventHandler("Reset Brighness")
+    eventHandler("Reset Brightness")
 }
 
 def eventHandler(evt) {
