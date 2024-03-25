@@ -43,9 +43,16 @@
 *		- New option to reset the color temperature when a device is dimmed manually
 *		- Fix for Brightness Options page
 *		- Minor formatting updates
+*	0.95 (March 24, 2024)
+*               - Fix for sunrise/sunset offset
+*		- New option to select switches to turn on while Day Lights is active
+*		- Added a log entry when manual dimming turns off Dynamic Brightness
+*		- Don't disable Dynamic Brightness if device reports current level as null
 *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 */
+
+import groovy.time.TimeCategory
 
 definition(
     name: "Day Lights",
@@ -81,6 +88,7 @@ def MainPage(){
             input "colorTemperatureDevices", "capability.colorTemperature", title: "<b>Color temperature devices (CT mode)</b>", multiple:true
             input "colorDevices", "capability.colorControl", title: "<b>Color changing devices (RGB mode)</b>", multiple:true
             input "dimmableDevices", "capability.switchLevel", title: "<b>Dimmable devices (requires Dynamic Brightness to be enabled)</b>", multiple:true
+            input "otherSwitches", "capability.switch", title: "<b>Other switches to turn on while Day Lights is active</b>", multiple: true
         }
 
         section("<h2>Dynamic Brightness</h2>") {
@@ -157,10 +165,9 @@ def SunriseSunsetOptions() {
             input "sunsetOverride", "time", title: "Sunset Override"
             paragraph "<br>"
             input "useSunOffsets", "bool", title: "<b>Use Sunset/Sunrise Offsets (+/-)?</b>"
-            input "sunriseOffset", "decimal", title: "Sunrise Offset (+/-)"
-            input "sunsetOffset", "decimal", title: "Sunset Offset (+/-)"
+            input "sunriseOffset", "number", title: "Sunrise Offset (+/-)", range: "-240:240"
+            input "sunsetOffset", "number", title: "Sunset Offset (+/-)", range: "-240:240"
         }
-
     }
 }
 
@@ -327,6 +334,9 @@ private logDebug(debugText) {
 
 private def initialize() {
     state.scheduleActive = false
+	for (device in otherSwitches) {
+		device.off()
+	}
     state.bypassManualOverrideCheck = true
     state.disabledFromDimmer = false
     state.lastAssignedBrightness = 0
@@ -338,7 +348,7 @@ private def initialize() {
 	
     if (colorTemperatureDevices) {
         subscribe(colorTemperatureDevices, "switch.on", eventDeviceOn)
-		if (resetCT) {
+        if (resetCT) {
 		    subscribe(colorTemperatureDevices, "level", eventLevel)
 	    }
     }
@@ -380,7 +390,10 @@ def scheduleNextWakeup(evt) {
         logDebug("Next system sunrise time is ${sunriseTime}")
 	}
 	if (settings.useSunOffsets && settings.sunriseOffset != null && settings.sunriseOffset != "") {
-		sunriseTime = sunriseTime.plusMinutes(settings.sunriseOffset)
+        int offset = settings.sunriseOffset
+        use(TimeCategory) {
+		    sunriseTime = sunriseTime + offset.minutes
+        }
         logDebug("Sunrise offset to ${sunriseTime}")
 	}
 	
@@ -450,19 +463,21 @@ def eventHandler(evt) {
     }
     else if (settings.disableWhenDimmed && !state.disabledFromDimmer) {
 		for (device in colorTemperatureDevices) {
-			if (device.currentValue("switch") == "on" && device.currentValue("level") != state.lastAssignedBrightness) {
+			if (device.currentValue("switch") == "on" && device.currentValue("level") != null && device.currentValue("level") != state.lastAssignedBrightness) {
 				state.disabledFromDimmer = true
+                logDescriptionText("Dynamic Brightness disabled by ${device} level=${device.currentValue("level")} but was last assigned=${state.lastAssignedBrightness}")
 			}
 		}
         //Some color devices don't precisely apply the HSV values, so they will not be considered for disabling Dynamic Brightness
 		//for (device in colorDevices) {
-		//	if (device.currentValue("switch") == "on" && device.currentValue("level") != state.lastAssignedBrightness) {
+		//	if (device.currentValue("switch") == "on" && device.currentValue("level") != null && device.currentValue("level") != state.lastAssignedBrightness) {
 		//		state.disabledFromDimmer = true
 		//	}
 		//}
 		for (device in dimmableDevices) {
-			if (device.currentValue("switch") == "on" && device.currentValue("level") != state.lastAssignedBrightness) {
+			if (device.currentValue("switch") == "on" && device.currentValue("level") != null && device.currentValue("level") != state.lastAssignedBrightness) {
 				state.disabledFromDimmer = true
+                logDescriptionText("Dynamic Brightness disabled by ${device} level=${device.currentValue("level")} but was last assigned=${state.lastAssignedBrightness}")
 			}
 		}
 		if (state.disabledFromDimmer) {
@@ -658,12 +673,18 @@ def getNewValues() {
 		if (!state.scheduleActive)  {
             schedule("0 */5 * * * ?", eventHandler, [data: "Update Lights"])
 		    state.scheduleActive = true
+		    for (device in otherSwitches) {
+			    device.on()
+			}
 		}
 	}
 	else {
 	    if (state.scheduleActive) {
 		    unschedule(eventHandler)
 	        state.scheduleActive = false
+		    for (device in otherSwitches) {
+			    device.off()
+			}
 		}
 	    colorTemp = warmCT
 		brightness = minBrightness
@@ -787,7 +808,10 @@ private def getSunriseTime() {
         logDebug("System Sunrise time is ${sunriseTime}")
 	}
 	if (settings.useSunOffsets && settings.sunriseOffset != null && settings.sunriseOffset != "") {
-		sunriseTime = sunriseTime.plusMinutes(settings.sunriseOffset)
+        int offset = settings.sunriseOffset
+        use(TimeCategory) {
+		    sunriseTime = sunriseTime + offset.minutes
+        }
         logDebug("Sunrise offset to ${sunriseTime}")
 	}
 	
@@ -808,7 +832,10 @@ private def getSunsetTime(){
         logDebug("System Sunset time is ${sunsetTime}")
 	}
 	if (settings.useSunOffsets && settings.sunsetOffset != null && settings.sunsetOffset != "") {
-		sunsetTime = sunsetTime.plusMinutes(settings.sunsetOffset)
+        int offset = settings.sunsetOffset
+        use(TimeCategory) {
+		    sunsetTime = sunsetTime + offset.minutes
+        }
         logDebug("Sunset offset to ${sunsetTime}")
 	}
 	
