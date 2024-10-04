@@ -44,10 +44,14 @@
 *		- Fix for Brightness Options page
 *		- Minor formatting updates
 *	0.95 (March 24, 2024)
-*               - Fix for sunrise/sunset offset
+*       - Fix for sunrise/sunset offset
 *		- New option to select switches to turn on while Day Lights is active
 *		- Added a log entry when manual dimming turns off Dynamic Brightness
 *		- Don't disable Dynamic Brightness if device reports current level as null
+*	0.96 (October 4, 2024)
+*       - No log entries from scheduled updates while processing is disabled
+*		- New option to select a button to re-enable Dynamic Brightness
+*		- New option to select hub variables to save the calculated color temperature and brightness values
 *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 */
@@ -72,7 +76,7 @@ preferences {
     page name: "BrightnessOptions"
     page name: "ModeOptions"
     page name: "DisableOptions"
-
+    page name: "HubVariables"
 }
 
 def MainPage(){
@@ -121,6 +125,11 @@ def MainPage(){
                  title: "<b>Disable Options</b>",
                  page: "DisableOptions",
                  description: "Set Disable Options"
+            )
+            href(name: "toHubVariables",
+                 title: "<b>Hub Variables</b>",
+                 page: "HubVariables",
+                 description: "Select Hub Variables"
             )
         }
 	
@@ -288,8 +297,26 @@ def DisableOptions(){
         section("<h2>Disable Dynamic Brightness</h2>") {
             input "disableWhenDimmed", "bool", title: "<b>Disable Dynamic Brightness for the day when the brightness on a selected device is manually changed?</b>"
             paragraph "Dynamic Brightness will be re-enabled automatically at the next sunrise"
+            input "enableButton", "capability.pushableButton", title: "Button to re-enable Dynamic Brighness and refresh brightness levels", width: 6, submitOnChange: true
+			if (enableButton) {
+				def buttonrange = 1..enableButton.currentValue("numberOfButtons")
+				input "enableButtonNumber","enum", title: "Button Number", width: 6, required: true, options:buttonrange
+			}
+            input "minBrightnessOverride","number", title: "Low Brightness (default is 1)"
             input "reenableDimmingTime", "time", title: "Add an additional time to re-enable Dynamic Brightness"
             paragraph "If currently disabled, Dynamic Brightness will be re-enabled by clicking the Done button"
+        }
+    }
+}
+
+def HubVariables(){
+    dynamicPage(name: "HubVariables") {
+
+        section("<h2>Hub Variables</h2>") {
+            paragraph "Optionally specify hub variables to save the current values calculated by Day Lights<br><br>"
+            def intglobalvars = getGlobalVarsByType("integer").keySet()
+            input "hvCT", "enum", title: "Select variable to save the current calculated color temperature", options:intglobalvars
+            input "hvLevel","enum", title: "Select variable to save the current calculated brightness level", options:intglobalvars
         }
     }
 }
@@ -297,18 +324,21 @@ def DisableOptions(){
 def installed() {
     unsubscribe()
     unschedule()
+    removeAllInUseGlobalVar()
     initialize()
 }
 
 def updated() {
     unsubscribe()
     unschedule()
+    removeAllInUseGlobalVar()
     initialize()
 }
 
 def uninstalled() {
     unsubscribe()
     unschedule()
+    removeAllInUseGlobalVar()
 }
 
 private logDescriptionText(debugText) {
@@ -337,7 +367,7 @@ private def initialize() {
 	for (device in otherSwitches) {
 		device.off()
 	}
-    state.bypassManualOverrideCheck = true
+    state.processing = false
     state.disabledFromDimmer = false
     state.lastAssignedBrightness = 0
 	
@@ -364,7 +394,17 @@ private def initialize() {
     if (disablingSwitches) { 
         subscribe(disablingSwitches, "switch", eventSwitch) 
     }
+    if (enableButton) { 
+        subscribe(enableButton, "pushed", eventEnable) 
+    }
+    if (settings.hvCT != "") {
+        addInUseGlobalVar(settings.hvCT)
+    }
+    if (settings.hvLevel != "") {
+        addInUseGlobalVar(settings.hvLevel)
+    }
 	scheduleNextWakeup()
+    state.bypassManualOverrideCheck = true
 	eventHandler("Initialize")
 }
 
@@ -405,6 +445,13 @@ def eventApplication(evt) {
     eventHandler("Application ${evt.name}(${evt.value})")
 }
 
+def eventUpdate(evt) {
+
+    if (!state.processing) {
+        eventHandler("Update Lights")
+    }
+}
+
 def eventDeviceOn(evt) {
 
     state.bypassManualOverrideCheck = true
@@ -417,7 +464,16 @@ def eventMode(evt) {
 }
 def eventSwitch(evt) {
 
-    eventHandler("Disable Switch")
+    eventHandler("Re-enable Processing")
+}
+def eventEnable(evt) {
+
+	if (state.disabledFromDimmer && enableButton.currentValue("pushed").toString() == settings.enableButtonNumber) {
+		state.disabledFromDimmer = false
+		unschedule(disableDimmerOverride)
+		state.bypassManualOverrideCheck = true
+		eventHandler("Re-enable Dynamic Brightness")
+	}
 }
 
 def eventLevel(evt) {
@@ -444,9 +500,10 @@ def disableDimmerOverride(evt) {
 
 def eventHandler(evt) {
 	
+    state.processing = true
     for (disableSwitch in disablingSwitches) {
         if ((disableSwitch.currentSwitch == "on" && !settings.disableWhenSwitchOff) || (disableSwitch.currentSwitch == "off" && settings.disableWhenSwitchOff)) {
-		    logDescriptionText("Currently disabled by a switch")
+            logDescriptionText("Processing disabled by ${disableSwitch}")
             return
         }
     }
@@ -468,12 +525,6 @@ def eventHandler(evt) {
                 logDescriptionText("Dynamic Brightness disabled by ${device} level=${device.currentValue("level")} but was last assigned=${state.lastAssignedBrightness}")
 			}
 		}
-        //Some color devices don't precisely apply the HSV values, so they will not be considered for disabling Dynamic Brightness
-		//for (device in colorDevices) {
-		//	if (device.currentValue("switch") == "on" && device.currentValue("level") != null && device.currentValue("level") != state.lastAssignedBrightness) {
-		//		state.disabledFromDimmer = true
-		//	}
-		//}
 		for (device in dimmableDevices) {
 			if (device.currentValue("switch") == "on" && device.currentValue("level") != null && device.currentValue("level") != state.lastAssignedBrightness) {
 				state.disabledFromDimmer = true
@@ -481,13 +532,15 @@ def eventHandler(evt) {
 			}
 		}
 		if (state.disabledFromDimmer) {
+			def disabletext = "Dynamic Brightness disabled until reset or next sunrise"
             if (settings.reenableDimmingTime != null && settings.reenableDimmingTime != "") {
                 def scheduleTime = new Date().parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", settings.reenableDimmingTime)
 		        if (scheduleTime > new Date()) {
 		            schedule(scheduleTime, disableDimmerOverride)
+					disabletext = "Dynamic Brightness disabled until ${scheduleTime}"
 		        }
             }
-		    logDescriptionText("Dynamic Brightness disabled until reset")
+		    logDescriptionText(disabletext)
 		}
     }
 
@@ -502,6 +555,12 @@ def eventHandler(evt) {
     }
     def color = [hex: hex, hue: hsv.h, saturation: hsv.s, level: hsv.v]
     state.lastAssignedBrightness = bright
+    if (settings.hvCT != "") {
+        setGlobalVar(settings.hvCT, ct)
+    }
+    if (settings.hvLevel != "") {
+        setGlobalVar(settings.hvLevel, bright)
+    }
     
     logEnhancedDescriptionText("CT=${ct}K, Level=${bright}%, Color=${hex}, Hue=${hsv.h}, Saturation=${hsv.s}, Value=${hsv.v}")
     logDebug("Color Temperature: ${ct}")
@@ -538,6 +597,7 @@ def eventHandler(evt) {
             }
         }
     }
+    state.processing = false
 }
 
 def getNewValues() {
@@ -671,7 +731,7 @@ def getNewValues() {
 			}
         }
 		if (!state.scheduleActive)  {
-            schedule("0 */5 * * * ?", eventHandler, [data: "Update Lights"])
+            schedule("0 */5 * * * ?", eventUpdate)
 		    state.scheduleActive = true
 		    for (device in otherSwitches) {
 			    device.on()
@@ -680,7 +740,7 @@ def getNewValues() {
 	}
 	else {
 	    if (state.scheduleActive) {
-		    unschedule(eventHandler)
+		    unschedule(eventUpdate)
 	        state.scheduleActive = false
 		    for (device in otherSwitches) {
 			    device.off()
