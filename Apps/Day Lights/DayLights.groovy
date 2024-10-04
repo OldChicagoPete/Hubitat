@@ -49,7 +49,7 @@
 *		- Added a log entry when manual dimming turns off Dynamic Brightness
 *		- Don't disable Dynamic Brightness if device reports current level as null
 *	0.96 (October 4, 2024)
-*       - No log entries from scheduled updates while processing is disabled
+*               - No log entries from scheduled updates while processing is disabled
 *		- New option to select a button to re-enable Dynamic Brightness
 *		- New option to select hub variables to save the calculated color temperature and brightness values
 *
