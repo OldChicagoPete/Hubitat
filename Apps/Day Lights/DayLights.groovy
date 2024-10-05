@@ -49,7 +49,7 @@
 *		- Added a log entry when manual dimming turns off Dynamic Brightness
 *		- Don't disable Dynamic Brightness if device reports current level as null
 *	0.96 (October 4, 2024)
-*               - No log entries from scheduled updates while processing is disabled
+*       - No log entries from scheduled updates while processing is disabled
 *		- New option to select a button to re-enable Dynamic Brightness
 *		- New option to select hub variables to save the calculated color temperature and brightness values
 *
@@ -374,7 +374,6 @@ private def initialize() {
     logDebug("initialize() with settings: ${settings}")
 
     subscribe(location, "sunriseTime", scheduleNextWakeup)
-    subscribe(app, eventApplication)
 	
     if (colorTemperatureDevices) {
         subscribe(colorTemperatureDevices, "switch.on", eventDeviceOn)
@@ -397,11 +396,21 @@ private def initialize() {
     if (enableButton) { 
         subscribe(enableButton, "pushed", eventEnable) 
     }
-    if (hvCT != "") {
-        addInUseGlobalVar(hvCT)
+    if (hvCT == null) {
+        hvCT = ""
+	}
+	else {
+        if (hvCT != "") {
+            addInUseGlobalVar(hvCT)
+        }
     }
-    if (hvLevel != "") {
-        addInUseGlobalVar(hvLevel)
+    if (hvLevel == null) {
+        hvLevel = ""
+	}
+	else {
+        if (hvLevel != "") {
+            addInUseGlobalVar(hvLevel)
+        }
     }
 	scheduleNextWakeup()
     state.bypassManualOverrideCheck = true
@@ -438,11 +447,6 @@ def scheduleNextWakeup(evt) {
 	}
 	
     schedule(sunriseTime, eventWakeup)
-}
-
-def eventApplication(evt) {
-
-    eventHandler("Application ${evt.name}(${evt.value})")
 }
 
 def eventUpdate(evt) {
