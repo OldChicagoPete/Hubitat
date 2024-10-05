@@ -397,11 +397,11 @@ private def initialize() {
     if (enableButton) { 
         subscribe(enableButton, "pushed", eventEnable) 
     }
-    if (settings.hvCT != "") {
-        addInUseGlobalVar(settings.hvCT)
+    if (hvCT != "") {
+        addInUseGlobalVar(hvCT)
     }
-    if (settings.hvLevel != "") {
-        addInUseGlobalVar(settings.hvLevel)
+    if (hvLevel != "") {
+        addInUseGlobalVar(hvLevel)
     }
 	scheduleNextWakeup()
     state.bypassManualOverrideCheck = true
