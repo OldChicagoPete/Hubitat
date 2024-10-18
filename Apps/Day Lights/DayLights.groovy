@@ -50,7 +50,7 @@
 *		- Don't disable Dynamic Brightness if device reports current level as null
 *	0.96 (October 4, 2024)
 *       - No log entries from scheduled updates while processing is disabled
-*		- New option to select a button to re-enable Dynamic Brightness
+*		- New option to select a button to re-enable Dynamic Brightness and/or refresh the lights
 *		- New option to select hub variables to save the calculated color temperature and brightness values
 *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -297,7 +297,7 @@ def DisableOptions(){
         section("<h2>Disable Dynamic Brightness</h2>") {
             input "disableWhenDimmed", "bool", title: "<b>Disable Dynamic Brightness for the day when the brightness on a selected device is manually changed?</b>"
             paragraph "Dynamic Brightness will be re-enabled automatically at the next sunrise"
-            input "enableButton", "capability.pushableButton", title: "Button to re-enable Dynamic Brighness and refresh brightness levels", width: 6, submitOnChange: true
+            input "enableButton", "capability.pushableButton", title: "Button to re-enable Dynamic Brighness and/or refresh light values", width: 6, submitOnChange: true
 			if (enableButton) {
 				def buttonrange = 1..enableButton.currentValue("numberOfButtons")
 				input "enableButtonNumber","enum", title: "Button Number", width: 6, required: true, options:buttonrange
@@ -472,7 +472,7 @@ def eventSwitch(evt) {
 }
 def eventEnable(evt) {
 
-	if (state.disabledFromDimmer && enableButton.currentValue("pushed").toString() == settings.enableButtonNumber) {
+	if (enableButton.currentValue("pushed").toString() == settings.enableButtonNumber) {
 		state.disabledFromDimmer = false
 		unschedule(disableDimmerOverride)
 		state.bypassManualOverrideCheck = true
