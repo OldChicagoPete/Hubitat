@@ -6,32 +6,32 @@
 		-*simple example driver for Sofabaton X1S remote, allows mapping X1S remote buttons to Hubitat button events
 	2025-03-28 Gassgs
 		-https://community.hubitat.com/t/my-seemingly-never-ending-quest-for-a-universal-av-remote/151722/65
-    -Made Button Count a preferences
+    		-Made Button Count a preferences
 	2025-04-01 OldChicagoPete
 		-Using the JSON header to send the button number as a key/value pair due to the Android Sofabaton app's validity requirements for the Body field
-     (This should work for iOS as well)
+		 (This should work for iOS as well)
 		-Default the Button Count to 20 to match the Sofabaton X1S hardware
 	2025-04-10 OldChicagoPete
 		-Added DoubleTap, Hold, and Release capabilities
-    -Added an optional key/value pair to support the additional capabilites
+		-Added an optional key/value pair to support the additional capabilites
 	
 
 	*Driver configuration
-    -X1S IP - [The Sofabaton's reserved IP address]
-    -Button Count - [The number of buttons for this device]
+		-X1S IP - [The Sofabaton's reserved IP address]
+		-Button Count - [The number of buttons for this device]
 
 	
 	*Mobile app configuration
-	-Click add devices (plus sign icon) on the Devices tab
-  -Select Wi-Fi
-	-Click link at bottom "Create a virtual device for IP control"
-	-COMMAND NAME - The command name that will be visible in the Sofabaton app
-	-URL - http://[HE hub IP address]:39501/route
-	-Request Method - PUT
-	-Connect type - application/json
-	-Additional Headers
-        button:[button number]
-        (optional) action:[pushed|doubleTapped|held|released]
+		-Click add devices (plus sign icon) on the Devices tab
+  		-Select Wi-Fi
+		-Click link at bottom "Create a virtual device for IP control"
+		-COMMAND NAME - The command name that will be visible in the Sofabaton app
+		-URL - http://[HE hub IP address]:39501/route
+		-Request Method - PUT
+		-Connect type - application/json
+		-Additional Headers
+			button:[button number]
+			(optional) action:[pushed|doubleTapped|held|released]
 */
 
 
