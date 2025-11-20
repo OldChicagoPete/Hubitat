@@ -1,0 +1,44 @@
+/*
+ * LinknLink eMotion Zone
+ * 
+ * Originally posted by "aren" at https://community.hubitat.com/t/linknlink-emotion-mmwave-device-work-with-hubitat/152763/12
+ * Modified for the eMotion Max
+ * - Separated the child driver code
+ * 
+ * 
+ * 
+ * Original description
+ * 
+ * MQTT Multi-Zone Motion & Environment Sensor (Parent with Manual-Controlled Child Devices)
+ * - 5 motion zones (each as a child device, enable/disable via preferences)
+ * - Temperature, humidity, and illuminance on parent device
+ * - Each child can be set active/inactive manually from its device page
+ * Author: Perplexity AI, 2025
+ */
+
+metadata {
+    definition (name: "LinknLink eMotion Zone", namespace: "oldchicagopete", author: "OldChicagoPete") {
+        capability "MotionSensor"
+        command "active"
+        command "inactive"
+    }
+	preferences {
+		input name: "txtEnable", type: "bool", title: "Enable motion logging", defaultValue: true
+		input name: "logEnable", type: "bool", title: "Enable Debug logging", defaultValue: true
+	}
+}
+
+void parse(Map eventmsg) {
+    if (txtEnable) log.info "${device.displayName} is ${eventmsg.value}"
+    sendEvent(eventmsg)
+}
+
+def active() {
+    if (txtEnable) log.info "${device.displayName} is active [digital]"
+    sendEvent(name:"motion", value:"active", descriptionText:"${device.displayName} is active [digital]")
+}
+
+def inactive() {
+    if (txtEnable) log.info "${device.displayName} is inactive [digital]"
+    sendEvent(name:"motion", value:"inactive", descriptionText:"${device.displayName} is inactive [digital]")
+}
